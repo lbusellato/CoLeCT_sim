@@ -28,13 +28,13 @@ class BaseRobot(MujocoEnv):
             "rgb_array",
             "depth_array",
         ],
-        "render_fps": 12,
+        "render_fps": 42,
     }
 
     def __init__(
         self,
         model_path="../../scene/scene.xml",
-        frame_skip=40,
+        frame_skip=12,
         default_camera_config: dict = DEFAULT_CAMERA_CONFIG,
         **kwargs,
     ):
@@ -109,7 +109,7 @@ class BaseRobot(MujocoEnv):
             ],
             min_effort=[-150, -150, -150, -150, -150, -150],
             max_effort=[150, 150, 150, 150, 150, 150],
-            target_type=TargetType.TWIST,
+            target_type=TargetType.POSE,
             kp=200.0,
             ko=200.0,
             kv=50.0,
@@ -270,15 +270,15 @@ class BaseRobot(MujocoEnv):
                 raise RuntimeError("Timeout while waiting for viewer to start.")
 
     def step(self, action):
-        """target_pose = np.array([-0.1,-0.6,1.1,0,1,0,0])
-        target_twist = np.array([0,0,0,0,0,0])
+        target_pose = np.array([0.25, 0.25, 0.1,0,0,0,-1])
+        """target_twist = np.array([0,0,0,0,0,0])
         target_wrench = np.array([0,0,0,0,0,0])"""
 
         for i in range(self.frame_skip):
             ctrl = self.data.ctrl.copy()
 
             self.controller.run(
-                action[:6], 
+                action, 
                 ctrl
             )
 
