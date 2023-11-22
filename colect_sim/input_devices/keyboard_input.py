@@ -8,6 +8,7 @@ class KeyboardInput:
         self.gripper_position = 0
         self.listener = keyboard.Listener(on_press=self.on_press, on_release=self.on_release)
         self.listener.start()
+        self.start = False
 
     def on_press(self, key):
         try:
@@ -34,7 +35,8 @@ class KeyboardInput:
                 self.angular_velocity = np.array(angular_mapping[key_char])
 
         except AttributeError:
-            pass
+            if key == keyboard.Key.space:
+                self.start = True
 
     def on_release(self, key):
         try:
@@ -49,3 +51,8 @@ class KeyboardInput:
     def get_action(self):
         action = np.concatenate((self.linear_velocity, self.angular_velocity))
         return action
+    
+    def wait_for_start(self):
+        while not self.start:
+            pass
+        return True

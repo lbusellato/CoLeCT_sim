@@ -140,13 +140,14 @@
                   <joint name="wrist_3_joint" class="size1"/>
                   <geom material="linkgray" mesh="wrist3" class="visual"/>
                   <geom class="eef_collision" pos="0 0.08 0" quat="1 1 0 0" size="0.04 0.02"/>
+                  <site name="attach_site" pos="0 0.1 0" quat="1 0 0 1"/>
                   <body name="end_effector" pos="0 0.1 0" quat="1 1 0 0">
                     <inertial mass="0.05" pos="0 0.0771683 0" quat="1 0 0 1"
                       diaginertia="0.000132134 9.90863e-05 9.90863e-05"/>
                     <geom material="jointgray" mesh="end_effector" class="visual"/>
                     <geom class="eef_collision" pos="0 0 -0.0512" quat="1 0 0 1" size="0.02 0.0512"/>
-                    
                     <site name="eef_site" pos="0 0 -0.1024" quat="1 0 0 1"/>
+                    
                   </body>
                 </body>
               </body>
@@ -171,5 +172,5 @@
     <torque name="eef_torque" site="eef_site" cutoff="10" />
   </sensor>
 
-  <!--include file="deformable.xml"/-->
+  <include file="deformable.xml"/>
 </mujoco>
