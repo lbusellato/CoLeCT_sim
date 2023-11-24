@@ -19,3 +19,9 @@ WARNING: Nan, Inf or huge value in CTRL at ACTUATOR 0. The simulation is unstabl
 Wed Nov 22 16:32:21 2023
 WARNING: Nan, Inf or huge value in CTRL at ACTUATOR 0. The simulation is unstable. Time = 0.0000.
 
+Thu Nov 23 10:04:10 2023
+WARNING: mju_openResource: unknown file './scene.xml'
+
+Thu Nov 23 10:04:18 2023
+WARNING: mju_openResource: unknown file 'scene.xml'
+

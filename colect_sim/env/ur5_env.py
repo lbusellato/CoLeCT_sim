@@ -1,3 +1,5 @@
+import matplotlib.animation as animation
+import matplotlib.pyplot as plt
 import numpy as np
 import time
 
@@ -11,6 +13,8 @@ from colect_sim.utils.mujoco_utils import MujocoModelNames
 from mujoco import viewer
 from os import path
 
+from threading import Thread, Lock
+
 np.set_printoptions(formatter={'float': lambda x: "{0:0.5f}".format(x)})
 
 
@@ -22,20 +26,22 @@ DEFAULT_CAMERA_CONFIG = {
 }
 
 class BaseRobot(MujocoEnv):
+
     metadata = {
         "render_modes": [
             "human",
             "rgb_array",
             "depth_array",
         ],
-        "render_fps": 42,
+        "render_fps": 25,
     }
 
     def __init__(
         self,
         model_path="../../scene/scene.xml",
-        frame_skip=12,
+        frame_skip=40,
         default_camera_config: dict = DEFAULT_CAMERA_CONFIG,
+        plot=True,
         **kwargs,
     ):
         xml_file_path = path.join(
@@ -258,8 +264,65 @@ class BaseRobot(MujocoEnv):
         #     ft_smoothing_factor=0,
         # )
 
+        self.op_target = None
+        self.op_target_reached = False
+        
+        home_pose = [-0.33357, 0.81420, 0.06377, 0.00005, 0.70715, -0.00005, 0.70707]
+
+        self.pose_history_lock = Lock()
+        self.pose_history = [home_pose]*2000
+
+        self.plot = plot
+        if self.plot:
+            self.p = Thread(target=self.runGraph, daemon=True)
+            self.p.start()
+
+
         self.viewer = viewer.launch_passive(self.model, self.data)
         self.wait_for_viewer()
+
+    def runGraph(self):
+        # Create figure for plotting
+        fig, ax = plt.subplots(1,7)
+        plt.tight_layout()
+        dt = 0.001
+        time = dt*np.arange(0, 2000)
+        data = []
+        lines = []
+        labels = ['Position x [m]',
+                  'Position y [m]',
+                  'Position z [m]',
+                  'Quaternion x [m]',
+                  'Quaternion y [m]',
+                  'Quaternion z [m]',
+                  'Quaternion w [m]',]
+        for i in range(7):
+            data = [pose[i] for pose in self.pose_history]
+            line, = ax[i].plot(time, data)
+            lines.append(line)
+            ax[i].set_xlabel('Time [s]')
+            ax[i].set_ylabel(labels[i])
+            
+        def animate(i, ys):
+            # Update line with new Y values
+            with self.pose_history_lock:
+                for i in range(7):
+                    data = [pose[i] for pose in ys]
+                    lines[i].set_ydata(data[-2000:])
+                    buffer = 0.1*(max(data) - min(data))
+                    ax[i].set_ylim(min(data) - buffer, max(data) + buffer)
+
+            return [line for line in lines]
+
+        # Set up plot to call animate() function periodically
+
+        ani = animation.FuncAnimation(fig,
+            animate,
+            fargs=(self.pose_history,),
+            interval=50,
+            blit=True,
+            cache_frame_data=False)
+        plt.show()
 
     def wait_for_viewer(self):
         timeout = 5.0
@@ -267,12 +330,9 @@ class BaseRobot(MujocoEnv):
         while not self.viewer.is_running():
             elapsed = time.time() - start_time
             if elapsed > timeout:
-                raise RuntimeError("Timeout while waiting for viewer to start.")
+                print("Timeout while waiting for viewer to start.")
 
     def step(self, action):
-        target_pose = np.array([0.25, 0.25, 0.1,0,0,0,-1])
-        """target_twist = np.array([0,0,0,0,0,0])
-        target_wrench = np.array([0,0,0,0,0,0])"""
 
         for i in range(self.frame_skip):
             ctrl = self.data.ctrl.copy()
@@ -286,8 +346,10 @@ class BaseRobot(MujocoEnv):
             self.do_simulation(ctrl, n_frames=1)
         # Update the visualization
         self.viewer.sync()
-        # reward, terminated, truncated, info
-        return 0.0, not self.viewer.is_running(), False, {}
+        with self.pose_history_lock:
+            self.pose_history.append(self.controller.actual_pose)
+            self.pose_history.pop(0)
+        return self.controller.target_reached(), not self.viewer.is_running()
 
     def reset_model(self):
         qpos = self.init_qpos
@@ -297,3 +359,5 @@ class BaseRobot(MujocoEnv):
     def close(self):
         if self.viewer.is_running():
             self.viewer.close()
+        if self.plot:
+            self.p.join(timeout=5.0)

@@ -1,5 +1,6 @@
 from pynput import keyboard
 import numpy as np
+import time
 
 class KeyboardInput:
     def __init__(self):
@@ -52,7 +53,14 @@ class KeyboardInput:
         action = np.concatenate((self.linear_velocity, self.angular_velocity))
         return action
     
-    def wait_for_start(self):
+    def wait_for_start(self, env):
+        timeout = 60.0
+        start_time = time.time()
         while not self.start:
-            pass
+            if not env.viewer.is_running():
+                return False
+            elapsed = time.time() - start_time
+            if elapsed > timeout:
+                print("Timeout while waiting for user to start the simulation.")
+                return False
         return True

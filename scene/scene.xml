@@ -3,7 +3,7 @@
 
   <option integrator="implicitfast"/>
 
-  <option timestep="0.002">
+  <option timestep="0.001">
     <flag warmstart="enable"></flag>
   </option>
 
@@ -172,5 +172,4 @@
     <torque name="eef_torque" site="eef_site" cutoff="10" />
   </sensor>
 
-  <include file="deformable.xml"/>
 </mujoco>

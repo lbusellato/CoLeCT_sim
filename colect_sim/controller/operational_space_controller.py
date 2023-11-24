@@ -74,6 +74,10 @@ class OperationalSpaceController(JointEffortController):
         self.scale_xyz = vmax_xyz / self.kp * self.kv
         self.scale_abg = vmax_abg / self.ko * self.kv
 
+        self.actual_pose = None
+        self.target_pose = None
+        self.target_tol = 0.01
+
     def run(self, target: np.ndarray, ctrl: np.ndarray) -> None:
         """
         Run the operational space controller to control the robot's joints using operational space control with gravity compensation.
@@ -102,6 +106,9 @@ class OperationalSpaceController(JointEffortController):
         ee_quat = mat2quat(self.data.site_xmat[self.eef_id].reshape(3, 3))
         ee_pose = np.concatenate([ee_pos, ee_quat])
         ee_twist = J @ dq
+
+        self.target_pose = target
+        self.actual_pose = ee_pose
 
         # Initialize the task space control signal (desired end-effector motion).
         u_task = np.zeros(6)
@@ -162,6 +169,12 @@ class OperationalSpaceController(JointEffortController):
             scale[3:] *= self.scale_abg / norm_abg
 
         return self.kv * scale * self.lamb * u_task
+    
+    def target_reached(self):
+        if self.actual_pose is not None and self.target_pose is not None:
+            return max(np.abs(self.actual_pose - self.target_pose)) < self.target_tol
+        else:
+            return False
 
 class ImpedanceController(JointEffortController):
     def __init__(
