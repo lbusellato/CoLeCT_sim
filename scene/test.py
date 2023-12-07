@@ -5,7 +5,7 @@ import faulthandler
 faulthandler.enable()
 path = abspath(dirname(__file__))
 
-m = mujoco.MjModel.from_xml_path(join(path, 'scene.xml'))
+m = mujoco.MjModel.from_xml_path(join(path, 'deformable.xml'))
 d = mujoco.MjData(m)
 
 with mujoco.viewer.launch_passive(m, d) as viewer:

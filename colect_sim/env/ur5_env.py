@@ -1,4 +1,5 @@
 import matplotlib.animation as animation
+import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 import time
@@ -33,15 +34,15 @@ class BaseRobot(MujocoEnv):
             "rgb_array",
             "depth_array",
         ],
-        "render_fps": 25,
+        "render_fps": 62,
     }
 
     def __init__(
         self,
         model_path="../../scene/scene.xml",
-        frame_skip=40,
+        frame_skip=16,
         default_camera_config: dict = DEFAULT_CAMERA_CONFIG,
-        plot=True,
+        plot=False,
         **kwargs,
     ):
         xml_file_path = path.join(
@@ -267,10 +268,10 @@ class BaseRobot(MujocoEnv):
         self.op_target = None
         self.op_target_reached = False
         
-        home_pose = [-0.33357, 0.81420, 0.06377, 0.00005, 0.70715, -0.00005, 0.70707]
+        home_data = [-0.33357, 0.81420, 0.06377, 0.00005, 0.70715, -0.00005, 0.70707, 0, 0, 0, 0, 0, 0]
 
-        self.pose_history_lock = Lock()
-        self.pose_history = [home_pose]*2000
+        self.history_lock = Lock()
+        self.history = [home_data]*2000
 
         self.plot = plot
         if self.plot:
@@ -283,8 +284,10 @@ class BaseRobot(MujocoEnv):
 
     def runGraph(self):
         # Create figure for plotting
-        fig, ax = plt.subplots(1,7)
-        plt.tight_layout()
+        fig = plt.figure(figsize=(10,6))
+        gs = gridspec.GridSpec(2,14,wspace=3)
+
+        
         dt = 0.001
         time = dt*np.arange(0, 2000)
         data = []
@@ -295,30 +298,56 @@ class BaseRobot(MujocoEnv):
                   'Quaternion x [m]',
                   'Quaternion y [m]',
                   'Quaternion z [m]',
-                  'Quaternion w [m]',]
+                  'Quaternion w [m]',
+                  'Force x [N]',
+                  'Force y [N]',
+                  'Force z [N]',
+                  'Torque x [Nmm]',
+                  'Torque y [Nmm]',
+                  'Torque z [Nmm]']
+        
+        axes = []
+        for i in range(0, 13):
+            if i < 7:
+                ax = plt.subplot(gs[0, 2 * i:2 * i + 2])
+            else:
+                ax = plt.subplot(gs[1, 2 * i - 13:2 * i + 2 - 13])
+            ax.set_xlabel('Time [s]')
+            ax.set_ylabel(labels[i])
+            ax.grid()
+            axes.append(ax)
+
         for i in range(7):
-            data = [pose[i] for pose in self.pose_history]
-            line, = ax[i].plot(time, data)
+            data = [pose[i] for pose in self.history]
+            line, = axes[i].plot(time, data)
             lines.append(line)
-            ax[i].set_xlabel('Time [s]')
-            ax[i].set_ylabel(labels[i])
+        for i in range(6):
+            data = [wrench[7 + i] for wrench in self.history]
+            line, = axes[7+i].plot(time, data)
+            lines.append(line)
             
-        def animate(i, ys):
+        def animate(i, plot_data):
             # Update line with new Y values
-            with self.pose_history_lock:
+            with self.history_lock:
                 for i in range(7):
-                    data = [pose[i] for pose in ys]
+                    data = [pose[i] for pose in plot_data]
                     lines[i].set_ydata(data[-2000:])
                     buffer = 0.1*(max(data) - min(data))
-                    ax[i].set_ylim(min(data) - buffer, max(data) + buffer)
+                    axes[i].set_ylim(min(data) - buffer, max(data) + buffer)
+                for i in range(6):
+                    data = [wrench[7 + i] for wrench in plot_data]
+                    lines[7 + i].set_ydata(data[-2000:])
+                    buffer = 0.1*(max(data) - min(data))
+                    axes[7+i].set_ylim(min(data) - buffer, max(data) + buffer)
 
             return [line for line in lines]
+        
 
         # Set up plot to call animate() function periodically
 
         ani = animation.FuncAnimation(fig,
             animate,
-            fargs=(self.pose_history,),
+            fargs=(self.history, ),
             interval=50,
             blit=True,
             cache_frame_data=False)
@@ -346,9 +375,12 @@ class BaseRobot(MujocoEnv):
             self.do_simulation(ctrl, n_frames=1)
         # Update the visualization
         self.viewer.sync()
-        with self.pose_history_lock:
-            self.pose_history.append(self.controller.actual_pose)
-            self.pose_history.pop(0)
+
+        with self.history_lock:
+            if self.controller.plot_data is not None:
+                self.history.append(self.controller.plot_data)
+                self.history.pop(0)
+
         return self.controller.target_reached(), not self.viewer.is_running()
 
     def reset_model(self):

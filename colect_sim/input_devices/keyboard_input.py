@@ -54,7 +54,7 @@ class KeyboardInput:
         return action
     
     def wait_for_start(self, env):
-        timeout = 60.0
+        timeout = 180.0
         start_time = time.time()
         while not self.start:
             if not env.viewer.is_running():

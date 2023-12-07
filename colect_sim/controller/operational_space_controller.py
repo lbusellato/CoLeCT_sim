@@ -77,6 +77,7 @@ class OperationalSpaceController(JointEffortController):
         self.actual_pose = None
         self.target_pose = None
         self.target_tol = 0.01
+        self.actual_wrench = None
 
     def run(self, target: np.ndarray, ctrl: np.ndarray) -> None:
         """
@@ -88,7 +89,7 @@ class OperationalSpaceController(JointEffortController):
 
         Notes:
             The controller sets the control signals (efforts, i.e., controller joint torques) for the actuators based on operational space control to achieve the desired target (either pose or twist).
-        """
+        """        
         # Get the Jacobian matrix for the end-effector.
         J = get_site_jac(self.model, self.data, self.eef_id)
         J = J[:, self.jnt_dof_ids]
@@ -109,6 +110,9 @@ class OperationalSpaceController(JointEffortController):
 
         self.target_pose = target
         self.actual_pose = ee_pose
+        
+        # This is for the plots
+        self.plot_data = np.concatenate((ee_pose, np.array(self.data.sensordata)))
 
         # Initialize the task space control signal (desired end-effector motion).
         u_task = np.zeros(6)

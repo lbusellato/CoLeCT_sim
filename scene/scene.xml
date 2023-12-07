@@ -168,8 +168,10 @@
   </actuator>
 
   <sensor>
-    <force name="eef_force" site="eef_site" cutoff="50" />
-    <torque name="eef_torque" site="eef_site" cutoff="10" />
+    <force name="eef_force" site="attach_site" cutoff="50" />
+    <torque name="eef_torque" site="attach_site" cutoff="10" />
   </sensor>
+
+  <include file="soft_box.xml"/>
 
 </mujoco>
