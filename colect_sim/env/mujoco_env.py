@@ -65,9 +65,12 @@ class BaseMujocoEnv():
             "depth_array",
         ], self.metadata["render_modes"]
         if "render_fps" in self.metadata:
-            assert (
-                int(np.round(1.0 / self.dt)) == self.metadata["render_fps"]
-            ), f'Expected value: {int(np.round(1.0 / self.dt))}, Actual value: {self.metadata["render_fps"]}'
+            #assert (
+            #    int(np.round(1.0 / self.dt)) == self.metadata["render_fps"]
+            #), f'Expected value: {int(np.round(1.0 / self.dt))}, Actual value: {self.metadata["render_fps"]}'
+            if int(np.round(1.0 / self.dt)) != self.metadata["render_fps"]:
+                print(f'Setting render_fps from {self.metadata["render_fps"]} to {int(np.round(1.0 / self.dt))}')
+                self.metadata["render_fps"] = int(np.round(1.0 / self.dt))
 
         self.render_mode = render_mode
         self.camera_name = camera_name

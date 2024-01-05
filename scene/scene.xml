@@ -1,13 +1,7 @@
 <mujoco model="ur5e scene">
-  <compiler angle="radian" meshdir="meshes/ur5e" autolimits="true"/>
-
-  <option integrator="implicitfast"/>
-
-  <option timestep="0.001">
-    <flag warmstart="enable"></flag>
-  </option>
-
-  <option impratio="10" />
+  <compiler angle="radian" meshdir="meshes/" autolimits="true"/>
+  
+  <option integrator="implicitfast" timestep="0.001"/>
 
   <extension>
     <plugin plugin="mujoco.elasticity.solid"/>
@@ -53,6 +47,9 @@
         <default class="eef_collision">
           <geom type="cylinder"/>
         </default>
+        <default class="us_probe_collision">
+          <geom type="mesh"/>
+        </default>
       </default>
       <site size="0.001" rgba="0.5 0.5 0.5 0.3" group="4"/>
     </default>
@@ -64,27 +61,30 @@
     <material class="ur5e" name="linkgray" rgba="0.82 0.82 0.82 1"/>
     <material class="ur5e" name="urblue" rgba="0.49 0.678 0.8 1"/>
 
-    <mesh file="base_0.obj"/>
-    <mesh file="base_1.obj"/>
-    <mesh file="shoulder_0.obj"/>
-    <mesh file="shoulder_1.obj"/>
-    <mesh file="shoulder_2.obj"/>
-    <mesh file="upperarm_0.obj"/>
-    <mesh file="upperarm_1.obj"/>
-    <mesh file="upperarm_2.obj"/>
-    <mesh file="upperarm_3.obj"/>
-    <mesh file="forearm_0.obj"/>
-    <mesh file="forearm_1.obj"/>
-    <mesh file="forearm_2.obj"/>
-    <mesh file="forearm_3.obj"/>
-    <mesh file="wrist1_0.obj"/>
-    <mesh file="wrist1_1.obj"/>
-    <mesh file="wrist1_2.obj"/>
-    <mesh file="wrist2_0.obj"/>
-    <mesh file="wrist2_1.obj"/>
-    <mesh file="wrist2_2.obj"/>
-    <mesh file="wrist3.obj"/>
-    <mesh file="end_effector.stl"/>
+    <mesh file="ur5e/base_0.obj"/>
+    <mesh file="ur5e/base_1.obj"/>
+    <mesh file="ur5e/shoulder_0.obj"/>
+    <mesh file="ur5e/shoulder_1.obj"/>
+    <mesh file="ur5e/shoulder_2.obj"/>
+    <mesh file="ur5e/upperarm_0.obj"/>
+    <mesh file="ur5e/upperarm_1.obj"/>
+    <mesh file="ur5e/upperarm_2.obj"/>
+    <mesh file="ur5e/upperarm_3.obj"/>
+    <mesh file="ur5e/forearm_0.obj"/>
+    <mesh file="ur5e/forearm_1.obj"/>
+    <mesh file="ur5e/forearm_2.obj"/>
+    <mesh file="ur5e/forearm_3.obj"/>
+    <mesh file="ur5e/wrist1_0.obj"/>
+    <mesh file="ur5e/wrist1_1.obj"/>
+    <mesh file="ur5e/wrist1_2.obj"/>
+    <mesh file="ur5e/wrist2_0.obj"/>
+    <mesh file="ur5e/wrist2_1.obj"/>
+    <mesh file="ur5e/wrist2_2.obj"/>
+    <mesh file="ur5e/wrist3.obj"/>
+    <mesh file="ur5e/end_effector.stl"/>
+    <mesh file="ur5e/HD3L15.stl" scale="0.001 0.001 0.001"/> <!--Scale from mm to m due to STL units-->
+    <mesh file="ur5e/us_probe.stl" /> 
+    <mesh file="phantom/phantom.stl" /> 
   </asset>
 
   <worldbody>
@@ -140,14 +140,20 @@
                   <joint name="wrist_3_joint" class="size1"/>
                   <geom material="linkgray" mesh="wrist3" class="visual"/>
                   <geom class="eef_collision" pos="0 0.08 0" quat="1 1 0 0" size="0.04 0.02"/>
-                  <site name="attach_site" pos="0 0.1 0" quat="1 0 0 1"/>
-                  <body name="end_effector" pos="0 0.1 0" quat="1 1 0 0">
+                  <site name="eef_site" pos="0 0.1 0" quat="1 0 0 1"/>
+                  <!--body name="end_effector" pos="0 0.1 0" quat="1 1 0 0">
                     <inertial mass="0.05" pos="0 0.0771683 0" quat="1 0 0 1"
                       diaginertia="0.000132134 9.90863e-05 9.90863e-05"/>
-                    <geom material="jointgray" mesh="end_effector" class="visual"/>
+                    <geom material="jointgray" mesh="HD3L15" class="visual"/>
                     <geom class="eef_collision" pos="0 0 -0.0512" quat="1 0 0 1" size="0.02 0.0512"/>
                     <site name="eef_site" pos="0 0 -0.1024" quat="1 0 0 1"/>
-                    
+                  </body>
+                  -->
+                  <body name="end_effector" pos="0 0.098 0" quat="1 0 0 0">
+                    <inertial mass="0.325" pos="0 0.07675 0"/>
+                    <geom material="jointgray" mesh="us_probe" class="visual"/>
+                    <geom class="us_probe_collision" mesh="us_probe"/>
+                    <site name="tcp_site" pos="0 0.15175 0" quat="1 0 0 1"/>
                   </body>
                 </body>
               </body>
@@ -168,10 +174,20 @@
   </actuator>
 
   <sensor>
-    <force name="eef_force" site="attach_site" cutoff="50" />
-    <torque name="eef_torque" site="attach_site" cutoff="10" />
+    <force name="eef_force" site="eef_site" cutoff="50" />
+    <torque name="eef_torque" site="eef_site" cutoff="10" />
   </sensor>
 
-  <include file="soft_box.xml"/>
-
+  <worldbody>
+    <flexcomp type="grid" count="10 9 4" spacing=".02 .02 .02" pos=".5 .5 .03"
+              radius=".0001" rgba=".33 .31 0.28 1" name="softbody" dim="3" mass="1">
+        <pin id="0 32 324 356" range="1 1 1 1 1 1 1 1"/> <!--pin the lower 4 corners in place-->
+        <contact condim="3" solref="0.01 1" solimp=".95 .99 .0001" selfcollide="none"/>
+        <edge damping="1"/>
+        <plugin plugin="mujoco.elasticity.solid">
+          <config key="poisson" value="0.1"/>
+          <config key="young" value="5e4"/><!--15 kPa-->
+        </plugin>
+    </flexcomp>
+  </worldbody>
 </mujoco>

@@ -4,11 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import time
 
-from colect_sim.controller.operational_space_controller import ImpedanceController, ComplianceController, OperationalSpaceController, TargetType
-from colect_sim.controller.joint_effort_controller import JointEffortController
-from colect_sim.controller.joint_velocity_controller import JointVelocityController
-from colect_sim.controller.joint_position_controller import JointPositionController
-from colect_sim.controller.force_torque_sensor_controller import ForceTorqueSensorController
+from colect_sim.controller.operational_space_controller import ParallelForcePositionController, AdmittanceController, OperationalSpaceController, TargetType
 from colect_sim.env.mujoco_env import MujocoEnv
 from colect_sim.utils.mujoco_utils import MujocoModelNames
 from mujoco import viewer
@@ -26,7 +22,7 @@ DEFAULT_CAMERA_CONFIG = {
     "lookat": np.array([0, 0, 1]),
 }
 
-class BaseRobot(MujocoEnv):
+class UR5Env(MujocoEnv):
 
     metadata = {
         "render_modes": [
@@ -34,13 +30,13 @@ class BaseRobot(MujocoEnv):
             "rgb_array",
             "depth_array",
         ],
-        "render_fps": 62,
+        "render_fps": 1000, # Basically no fps limit
     }
 
     def __init__(
         self,
         model_path="../../scene/scene.xml",
-        frame_skip=16,
+        frame_skip=1,
         default_camera_config: dict = DEFAULT_CAMERA_CONFIG,
         plot=False,
         **kwargs,
@@ -60,40 +56,9 @@ class BaseRobot(MujocoEnv):
         self.init_qvel = self.data.qvel.copy()
         self.init_ctrl = self.data.ctrl.copy()
 
-
         self.model_names = MujocoModelNames(self.model) 
 
-
-        
-        
-
-        # self.controller = ImpedanceController(
-        #     model=self.model, 
-        #     data=self.data, 
-        #     model_names=self.model_names,
-        #     eef_name='robot0:eef_site', 
-        #     joint_names=[
-        #         'robot0:ur5e:shoulder_pan_joint',
-        #         'robot0:ur5e:shoulder_lift_joint',
-        #         'robot0:ur5e:elbow_joint',
-        #         'robot0:ur5e:wrist_1_joint',
-        #         'robot0:ur5e:wrist_2_joint',
-        #         'robot0:ur5e:wrist_3_joint',
-        #     ],
-        #     actuator_names=[
-        #         'robot0:ur5e:shoulder_pan',
-        #         'robot0:ur5e:shoulder_lift',
-        #         'robot0:ur5e:elbow',
-        #         'robot0:ur5e:wrist_1',
-        #         'robot0:ur5e:wrist_2',
-        #         'robot0:ur5e:wrist_3',
-        #     ],
-        #     min_effort=[-150, -150, -150, -150, -150, -150],
-        #     max_effort=[150, 150, 150, 150, 150, 150],
-        #     null_damp_kv=10,
-        # )
-
-        self.controller = OperationalSpaceController(
+        self.invdyn_controller = OperationalSpaceController(
             model=self.model, 
             data=self.data, 
             model_names=self.model_names,
@@ -117,168 +82,115 @@ class BaseRobot(MujocoEnv):
             min_effort=[-150, -150, -150, -150, -150, -150],
             max_effort=[150, 150, 150, 150, 150, 150],
             target_type=TargetType.POSE,
-            kp=200.0,
+            kp=400.0,
             ko=200.0,
             kv=50.0,
-            vmax_xyz=0.2,
-            vmax_abg=1,
+            vmax_xyz=2,
+            vmax_abg=2,
             null_damp_kv=10,
         )
+        
+        self.adm_controller = AdmittanceController(
+            model=self.model, 
+            data=self.data, 
+            model_names=self.model_names,
+            eef_name='eef_site', 
+            joint_names=[
+                'shoulder_pan_joint',
+                'shoulder_lift_joint',
+                'elbow_joint',
+                'wrist_1_joint',
+                'wrist_2_joint',
+                'wrist_3_joint',
+            ],
+            actuator_names=[
+                'shoulder_pan',
+                'shoulder_lift',
+                'elbow',
+                'wrist_1',
+                'wrist_2',
+                'wrist_3',
+            ],
+            min_effort=[-150, -150, -150, -150, -150, -150],
+            max_effort=[150, 150, 150, 150, 150, 150],
+            control_period=self.model.opt.timestep,
+        )
 
+        self.pf_controller = ParallelForcePositionController(
+            model=self.model, 
+            data=self.data, 
+            model_names=self.model_names,
+            eef_name='eef_site', 
+            joint_names=[
+                'shoulder_pan_joint',
+                'shoulder_lift_joint',
+                'elbow_joint',
+                'wrist_1_joint',
+                'wrist_2_joint',
+                'wrist_3_joint',
+            ],
+            actuator_names=[
+                'shoulder_pan',
+                'shoulder_lift',
+                'elbow',
+                'wrist_1',
+                'wrist_2',
+                'wrist_3',
+            ],
+            min_effort=[-150, -150, -150, -150, -150, -150],
+            max_effort=[150, 150, 150, 150, 150, 150],
+            min_velocity=[-1, -1, -1, -1, -1, -1],
+            max_velocity=[1, 1, 1, 1, 1, 1],
+            kp_jnt_vel=[100, 100, 100, 100, 100, 100],
+            ki_jnt_vel=0,
+            kd_jnt_vel=0,
+            kp=[10, 10, 10, 10, 10, 10],
+            ki=[0, 0, 0, 0, 0, 0],
+            kd=[3, 3, 3, 8, 8, 8],
+            control_period=self.model.opt.timestep,
+        )
+        self.pf_controller.Kp_f = np.eye(3)
+        self.pf_controller.Kv_f = np.eye(3)
+        self.pf_controller.Kp_p = np.eye(3)
+        self.pf_controller.Kd_p = np.eye(3)
 
-        # self.controller = JointEffortController(
-        #     model=self.model, 
-        #     data=self.data, 
-        #     model_names=self.model_names,
-        #     eef_name='robot0:eef_site', 
-        #     joint_names=[
-        #         'robot0:ur5e:shoulder_pan_joint',
-        #         'robot0:ur5e:shoulder_lift_joint',
-        #         'robot0:ur5e:elbow_joint',
-        #         'robot0:ur5e:wrist_1_joint',
-        #         'robot0:ur5e:wrist_2_joint',
-        #         'robot0:ur5e:wrist_3_joint',
-        #     ],
-        #     actuator_names=[
-        #         'robot0:ur5e:shoulder_pan',
-        #         'robot0:ur5e:shoulder_lift',
-        #         'robot0:ur5e:elbow',
-        #         'robot0:ur5e:wrist_1',
-        #         'robot0:ur5e:wrist_2',
-        #         'robot0:ur5e:wrist_3',
-        #     ],
-        #     min_effort=[-150, -150, -150, -150, -150, -150],
-        #     max_effort=[150, 150, 150, 150, 150, 150],
-        # )
-
-        # self.controller = JointVelocityController(
-        #     model=self.model, 
-        #     data=self.data, 
-        #     model_names=self.model_names,
-        #     eef_name='robot0:eef_site', 
-        #     joint_names=[
-        #         'robot0:ur5e:shoulder_pan_joint',
-        #         'robot0:ur5e:shoulder_lift_joint',
-        #         'robot0:ur5e:elbow_joint',
-        #         'robot0:ur5e:wrist_1_joint',
-        #         'robot0:ur5e:wrist_2_joint',
-        #         'robot0:ur5e:wrist_3_joint',
-        #     ],
-        #     actuator_names=[
-        #         'robot0:ur5e:shoulder_pan',
-        #         'robot0:ur5e:shoulder_lift',
-        #         'robot0:ur5e:elbow',
-        #         'robot0:ur5e:wrist_1',
-        #         'robot0:ur5e:wrist_2',
-        #         'robot0:ur5e:wrist_3',
-        #     ],
-        #     min_effort=[-150, -150, -150, -150, -150, -150],
-        #     max_effort=[150, 150, 150, 150, 150, 150],
-        #     min_velocity=[-1, -1, -1, -1, -1, -1],
-        #     max_velocity=[1, 1, 1, 1, 1, 1],
-        #     kp=[100, 100, 100, 100, 100, 100],
-        #     ki=0,
-        #     kd=0,
-        # )
-
-        # self.controller = JointPositionController(
-        #     model=self.model, 
-        #     data=self.data, 
-        #     model_names=self.model_names,
-        #     eef_name='robot0:eef_site', 
-        #     joint_names=[
-        #         'robot0:ur5e:shoulder_pan_joint',
-        #         'robot0:ur5e:shoulder_lift_joint',
-        #         'robot0:ur5e:elbow_joint',
-        #         'robot0:ur5e:wrist_1_joint',
-        #         'robot0:ur5e:wrist_2_joint',
-        #         'robot0:ur5e:wrist_3_joint',
-        #     ],
-        #     actuator_names=[
-        #         'robot0:ur5e:shoulder_pan',
-        #         'robot0:ur5e:shoulder_lift',
-        #         'robot0:ur5e:elbow',
-        #         'robot0:ur5e:wrist_1',
-        #         'robot0:ur5e:wrist_2',
-        #         'robot0:ur5e:wrist_3',
-        #     ],
-        #     min_effort=[-150, -150, -150, -150, -150, -150],
-        #     max_effort=[150, 150, 150, 150, 150, 150],
-        #     min_position=[-1, -1, -1, -1, -1, -1],
-        #     max_position=[1, 1, 1, 1, 1, 1],
-        #     kp=[100, 100, 100, 100, 100, 100],
-        #     kd=[20, 20, 20, 20, 20, 20],
-        # )
-
+        self.controller = self.invdyn_controller
 
         self.init_qpos_config = {
-            "shoulder_pan_joint": 0,
+            "shoulder_pan_joint": np.pi / 2.0,
             "shoulder_lift_joint": -np.pi / 2.0,
             "elbow_joint": -np.pi / 2.0,
             "wrist_1_joint": -np.pi / 2.0,
             "wrist_2_joint": np.pi / 2.0,
-            "wrist_3_joint": 0,
+            "wrist_3_joint": np.pi / 2.0,
         }
         for joint_name, joint_pos in self.init_qpos_config.items():
             joint_id = self.model_names.joint_name2id[joint_name]
             qpos_id = self.model.jnt_qposadr[joint_id]
             self.init_qpos[qpos_id] = joint_pos
 
-
-
-        # self.controller = ComplianceController(
-        #     model=self.model, 
-        #     data=self.data, 
-        #     model_names=self.model_names,
-        #     eef_name='robot0:eef_site', 
-        #     joint_names=[
-        #         'robot0:ur5e:shoulder_pan_joint',
-        #         'robot0:ur5e:shoulder_lift_joint',
-        #         'robot0:ur5e:elbow_joint',
-        #         'robot0:ur5e:wrist_1_joint',
-        #         'robot0:ur5e:wrist_2_joint',
-        #         'robot0:ur5e:wrist_3_joint',
-        #     ],
-        #     actuator_names=[
-        #         'robot0:ur5e:shoulder_pan',
-        #         'robot0:ur5e:shoulder_lift',
-        #         'robot0:ur5e:elbow',
-        #         'robot0:ur5e:wrist_1',
-        #         'robot0:ur5e:wrist_2',
-        #         'robot0:ur5e:wrist_3',
-        #     ],
-        #     min_effort=[-150, -150, -150, -150, -150, -150],
-        #     max_effort=[150, 150, 150, 150, 150, 150],
-        #     min_velocity=[-1, -1, -1, -1, -1, -1],
-        #     max_velocity=[1, 1, 1, 1, 1, 1],
-        #     kp_jnt_vel=[100, 100, 100, 100, 100, 100],
-        #     ki_jnt_vel=0,
-        #     kd_jnt_vel=0,
-        #     kp=[10, 10, 10, 10, 10, 10],
-        #     ki=[0, 0, 0, 0, 0, 0],
-        #     kd=[3, 3, 3, 8, 8, 8],
-        #     control_period=self.model.opt.timestep,
-        #     ft_sensor_site='robot0:eef_site',
-        #     force_sensor_name='robot0:eef_force',
-        #     torque_sensor_name='robot0:eef_torque',
-        #     subtree_body_name='robot0:ur5e:wrist_3_link',
-        #     ft_smoothing_factor=0,
-        # )
-
         self.op_target = None
-        self.op_target_reached = False
         
         home_data = [-0.33357, 0.81420, 0.06377, 0.00005, 0.70715, -0.00005, 0.70707, 0, 0, 0, 0, 0, 0]
 
+        # For live plotting
         self.history_lock = Lock()
         self.history = [home_data]*2000
 
         self.plot = plot
         if self.plot:
+            # Start the thread for live plotting
             self.p = Thread(target=self.runGraph, daemon=True)
             self.p.start()
 
+        # This will hold recorded poses/forces
+        self.recorded_data = []
+        self.enable_recording = False
 
+        # Go to the home pose
+        self.reset_model()
+
+        # Start the viewer
         self.viewer = viewer.launch_passive(self.model, self.data)
         self.wait_for_viewer()
 
@@ -362,24 +274,28 @@ class BaseRobot(MujocoEnv):
                 print("Timeout while waiting for viewer to start.")
 
     def step(self, action):
+        
+        # Step the simulation
+        ctrl = self.data.ctrl.copy()
+        self.controller.run(
+            action, 
+            ctrl
+        )
+        self.do_simulation(ctrl, n_frames=1)
 
-        for i in range(self.frame_skip):
-            ctrl = self.data.ctrl.copy()
-
-            self.controller.run(
-                action, 
-                ctrl
-            )
-
-
-            self.do_simulation(ctrl, n_frames=1)
         # Update the visualization
         self.viewer.sync()
 
-        with self.history_lock:
-            if self.controller.plot_data is not None:
-                self.history.append(self.controller.plot_data)
-                self.history.pop(0)
+        # Update the live plotting
+        if self.plot:
+            with self.history_lock:
+                if self.controller.plot_data is not None:
+                    self.history.append(self.controller.plot_data)
+                    self.history.pop(0)
+
+        # Update the pose/force recording
+        if self.enable_recording:
+            self.recorded_data.append(self.controller.plot_data)
 
         return self.controller.target_reached(), not self.viewer.is_running()
 
